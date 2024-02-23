@@ -10,7 +10,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext
 import requests
 import logging
 
-from error_handler import *
+from error_handler import TokenError
 
 
 load_dotenv()
@@ -41,8 +41,7 @@ logging.getLogger(__name__).addHandler(
 
 
 def check_tokens(tokens: tuple) -> None:
-    """Проверяем наличие токенов"""
-
+    """Проверяем наличие токенов."""
     logging.info('Проверка наличия токенов...')
 
     if any([x is None for x in tokens]):
@@ -52,13 +51,12 @@ def check_tokens(tokens: tuple) -> None:
 
 
 def send_message(bot: Bot, message: str) -> None:
-    """Отправляем сообщение из бота"""
-
+    """Отправляем сообщение из бота."""
     logging.info('Пробуем отправить сообщение...')
 
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except Exception as error:
+    except TelegramError as error:
         logging.error(
             f'Боту не удалось отправить сообщение-ошибка{error}'
         )
@@ -68,10 +66,10 @@ def send_message(bot: Bot, message: str) -> None:
         )
     finally:
         logging.info('Совершена попытка отправить сообщение')
-    
+
 
 def get_api_answer(timestamp: int) -> HTTPResponse:
-    """Пробуем получить ответ от апи"""
+    """Пробуем получить ответ от апи."""
     logging.info('Пробуем отправить запрос к api...')
 
     try:
@@ -87,7 +85,7 @@ def get_api_answer(timestamp: int) -> HTTPResponse:
 
 
 def check_response(response: HTTPResponse) -> dict | None:
-    """Проверяем что данные совпадают ожидаемым типам"""
+    """Проверяем что данные совпадают ожидаемым типам."""
     logging.info('Проверка соответствия объектов классу...')
 
     homeworks = response.json()
@@ -111,7 +109,7 @@ def check_response(response: HTTPResponse) -> dict | None:
 def parse_status(homework: dict) -> str | None:
     """
     Проверяем статус работы, если ключ из словаря совпадает
-    со статусом, возвращаем значение
+    со статусом, возвращаем значение.
     """
     if any([x == homework['status'] for x in HOMEWORK_VERDICTS.keys()]):
         logging.info(
@@ -126,8 +124,7 @@ def parse_status(homework: dict) -> str | None:
 
 
 def start(updat: Update, context: CallbackContext) -> None:
-    """Действие после отправки команды старт"""
-
+    """Действие после отправки команды старт."""
     try:
         send_message(
             bot=context.bot,
@@ -144,7 +141,7 @@ def start(updat: Update, context: CallbackContext) -> None:
 
 
 def main() -> None:
-    """Главный метод, вызывается стразу при запуске всего кода"""
+    """Главный метод, вызывается стразу при запуске всего кода."""
     check_tokens((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
     bot = Bot(token=TELEGRAM_TOKEN)
@@ -173,6 +170,6 @@ def main() -> None:
 
         time.sleep(RETRY_PERIOD)
 
-    
+
 if __name__ == '__main__':
     main()
