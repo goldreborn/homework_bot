@@ -108,7 +108,7 @@ def check_response(response: HTTPResponse) -> dict | None:
 
 def parse_status(homework: dict) -> str | None:
     """
-    Проверяем статус работы, если ключ из словаря совпадает
+    Проверяем статус работы, если ключ из словаря совпадает.
     со статусом, возвращаем значение.
     """
     if any([x == homework['status'] for x in HOMEWORK_VERDICTS.keys()]):
