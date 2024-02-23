@@ -1,16 +1,16 @@
-from pprint import pprint
 from os import getenv
+from urllib3.response import HTTPResponse
+import time
+
+from pprint import pprint
 from dotenv import load_dotenv
-from error_handler import TokenError, ResponseError
-from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-)
-from telegram import Bot, ReplyKeyboardMarkup, Update
+from telegram import Bot, Update
+from telegram import TelegramError
+from telegram.ext import Updater, CommandHandler, CallbackContext
+import requests
 import logging
-import requests as req
-from requests.exceptions import RequestException
-from datetime import datetime
-from http.client import HTTPResponse
+
+from error_handler import *
 
 
 load_dotenv()
@@ -19,16 +19,9 @@ PRACTICUM_TOKEN = getenv('practicum_token')
 TELEGRAM_TOKEN = getenv('telegram_token')
 TELEGRAM_CHAT_ID = getenv('telegram_chat_id')
 
-PRACTICUM_BORN_DATE = 1549962000
 RETRY_PERIOD = 600
-
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-PARAMS = {'from_date': PRACTICUM_BORN_DATE}
-
-BUTTON_TEXT = 'Жмяк'
-STARTED_QUEUE_TEXT = 'Начал следить за статусом твоей работы'
-
 
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
@@ -36,75 +29,93 @@ HOMEWORK_VERDICTS = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-queue_running = False
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename='bot.log',
+    filemode='w',
+    format='%(asctime)s - %(levelname)s - %(message)s - %(name)s'
+)
+logging.getLogger(__name__).addHandler(
+    logging.StreamHandler()
+)
 
 
-def check_tokens() -> None:
+def check_tokens(tokens: tuple) -> None:
+    """Проверяем наличие токенов"""
 
-    if any(
-        [
-            x is None for x in (
-                PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
-            )
-        ]
-    ):
+    logging.info('Проверка наличия токенов...')
+
+    if any([x is None for x in tokens]):
         raise TokenError(
-            ('Ошибка, токен не существует'),
-            ('или не получилось взять его из файла .env')
+            'Ошибка. Отсутствуют или неверно указаны токены'
         )
 
 
 def send_message(bot: Bot, message: str) -> None:
+    """Отправляем сообщение из бота"""
 
-    bot.send_message(
-        chat_id=TELEGRAM_CHAT_ID,
-        text=message
-    )
-
-
-def get_api_answer(timestamp: int) -> dict | None:
+    logging.info('Пробуем отправить сообщение...')
 
     try:
-        response = req.get(
-            url=ENDPOINT, headers=HEADERS, params={
-                'from_date': timestamp
-            }
-        )
-    except RequestException:
-
-        logging.error(f'Ошибка {response.status_code}')
-        raise ResponseError(
-            ('Ошибка, не удалось подключится к api'),
-            (f'Код ошибки {response.status_code}'),
-            (f'Время {datetime.now()}')
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    except Exception as error:
+        logging.error(
+            f'Боту не удалось отправить сообщение-ошибка{error}'
         )
     else:
         logging.info(
-            ('Получил json данные из response'),
-            (f'Время {datetime.now()}')
+            f'{bot.__class__.__name__} отправил сообщение {message}'
         )
-        return response.json()
     finally:
-        logging.info(
-            ('Успешно'),
-            ('Произошёл запрос к api'),
-            (f'Время {datetime.now()}')
+        logging.info('Совершена попытка отправить сообщение')
+    
+
+def get_api_answer(timestamp: int) -> HTTPResponse:
+    """Пробуем получить ответ от апи"""
+    logging.info('Пробуем отправить запрос к api...')
+
+    try:
+        response = requests.get(
+            url=ENDPOINT, headers=HEADERS, params={
+                'from_date': timestamp
+            })
+        return response
+    except requests.exceptions.HTTPError as error:
+        logging.error(
+            f'Ошибка {error}. Код ответа {response.status_code}'
         )
 
 
-def check_response(response: HTTPResponse) -> None:
+def check_response(response: HTTPResponse) -> dict | None:
+    """Проверяем что данные совпадают ожидаемым типам"""
+    logging.info('Проверка соответствия объектов классу...')
 
-    if response is not None:
-        pass
+    homeworks = response.json()
+
+    if not isinstance(homeworks, list):
+        raise TypeError(
+            'Ошибка. Все домашки должны передаваться в списке'
+        )
+    elif any(not isinstance(x, dict) for x in homeworks):
+        raise TypeError(
+            'Ошибка. Каждая домашка должна передаваться в словаре'
+        )
+    elif 'homeworks' not in homeworks:
+        raise KeyError(
+            'Не найдены данные по ключю homeworks'
+        )
+    else:
+        return homeworks
 
 
 def parse_status(homework: dict) -> str | None:
-
+    """
+    Проверяем статус работы, если ключ из словаря совпадает
+    со статусом, возвращаем значение
+    """
     if any([x == homework['status'] for x in HOMEWORK_VERDICTS.keys()]):
-
         logging.info(
-            ('Статус работы изменён'),
-            (f'Время {datetime.now()}')
+            'Статус работы изменён'
         )
         return 'Изменился статус проверки работы "{name}". {verdict}'.format(
             name=homework['lesson_name'],
@@ -114,56 +125,54 @@ def parse_status(homework: dict) -> str | None:
         return None
 
 
-def handle_text(update: Update, context: CallbackContext) -> None:
+def start(updat: Update, context: CallbackContext) -> None:
+    """Действие после отправки команды старт"""
 
-    global queue_running
-
-    if update.message.text == BUTTON_TEXT and not queue_running:
-        context.bot.send_message(
-            chat_id=update.effective_chat,
-            text=STARTED_QUEUE_TEXT
+    try:
+        send_message(
+            bot=context.bot,
+            message='Привет, я бот который проверяет статус твоей работы'
         )
-        queue_running = True
-    elif update.message.text == BUTTON_TEXT and queue_running:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Проверка домашнего задания уже активирована'
+    except TelegramError as error:
+        logging.error(
+            f'Ошибка {error}. Бот не смог отправить сообщение'
         )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Неизвестная команда'
-        )
+        logging.info('Сообщение успешно отправлено')
+    finally:
+        logging.info('Совершена попытка отправить сообщение')
 
 
-def start(update: Update, context: CallbackContext) -> None:
-
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Привет, я твой бот который будет проверять состояние домашки',
-        reply_markup=ReplyKeyboardMarkup(
-            [[
-                BUTTON_TEXT
-            ]]
-        )
-    )
-
-
-def main():
-
-    response = req.get(url=ENDPOINT, headers=HEADERS, params=PARAMS)
-
-    pprint(response.json())
+def main() -> None:
+    """Главный метод, вызывается стразу при запуске всего кода"""
+    check_tokens((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
     bot = Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    timestamp = time.time()
 
     updater = Updater(token=TELEGRAM_TOKEN)
-    updater.start_polling(poll_interval=float(RETRY_PERIOD))
     updater.dispatcher.add_handler(CommandHandler('start', start))
-    updater.dispatcher.add_handler(MessageHandler(Filters.text, handle_text))
+    updater.start_polling()
+    updater.idle()
 
+    while True:
 
+        try:
+            response = get_api_answer(timestamp)
+            pprint(response.json())
+        except Exception as error:
+            print(f'Произошла ошибка: {error}')
+        else:
+            homeworks = check_response(response)
 
+            if len(homeworks) != 0:
+                bot.send_message(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    text=parse_status(homeworks[0])
+                )
+
+        time.sleep(RETRY_PERIOD)
+
+    
 if __name__ == '__main__':
     main()
