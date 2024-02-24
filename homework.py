@@ -75,8 +75,10 @@ def get_api_answer(timestamp: int) -> Any:
     except requests.RequestException as error:
 
         raise ConnectionError(
-            (f'Ошибка {error} при попытке отправить запрос на сервер api'
-            f'| url={ENDPOINT} | headers={HEADERS} | params={payload}')
+            (
+                f'Ошибка {error} при попытке отправить запрос на сервер api'
+                f'| url={ENDPOINT} | headers={HEADERS} | params={payload}'
+            )
         )
     if response.status_code != HTTPStatus.OK:
         raise ResponseError(
