@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from telegram import Bot
 from telegram.error import TelegramError
 
-from error_handler import TokenError, ResponseError
+from error_handler import ResponseError
 
 
 load_dotenv()
@@ -44,7 +44,7 @@ def check_tokens() -> bool:
                 f'Критическая ошибка. Отсутствуют токены {token}'
             )
             return False
-    
+
     return True
 
 
@@ -69,21 +69,20 @@ def get_api_answer(timestamp: int) -> Any:
     logging.info('Пробуем отправить запрос к api...')
 
     try:
+        payload = {'from_date': timestamp}
         response = requests.get(
-            url=ENDPOINT, headers=HEADERS, params={
-                'from_date': timestamp
-            })
+            url=ENDPOINT, headers=HEADERS, params=payload)
     except requests.RequestException as error:
 
         raise ConnectionError(
-            ('Произошла ошибка при попытке отправить запрос на сервер api'
-            '| url=ENDPOINT | headers=HEADERS | params=from_date: timestamp')
+            (f'Ошибка {error} при попытке отправить запрос на сервер api'
+            f'| url={ENDPOINT} | headers={HEADERS} | params={payload}')
         )
     if response.status_code != HTTPStatus.OK:
-            raise ResponseError(
-                f'Ошибка. Код ответа {response.status_code}'
-            )
-    
+        raise ResponseError(
+            f'Ошибка. Код ответа {response.status_code}'
+        )
+
     return response.json()
 
 
@@ -95,7 +94,7 @@ def check_response(response: Any) -> list:
         raise TypeError(
             f'Ошибка. Полученный объект response не типа {type(dict)}'
         )
-    
+
     if not response['current_date']:
         raise KeyError(
             'Ошибка. Отсутствует дата по ключю current_date'
@@ -119,7 +118,6 @@ def check_response(response: Any) -> list:
 
 def parse_status(homework: dict) -> str:
     """Извлекает из информации о домашней работе статус работы."""
-
     logging.info('Начал проверку статуса работы...')
 
     homework_name = homework.get('homework_name')
@@ -142,9 +140,9 @@ def parse_status(homework: dict) -> str:
 
     logging.info('Окончил проверку статуса работы')
 
-    return 'Изменился статус проверки работы "{name}". {verdict}'.format( 
-        name=homework_name, 
-        verdict=HOMEWORK_VERDICTS[status] 
+    return 'Изменился статус проверки работы "{name}". {verdict}'.format(
+        name=homework_name,
+        verdict=HOMEWORK_VERDICTS[status]
     )
 
 
@@ -158,7 +156,7 @@ def main() -> None:
 
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    
+
     last_error = None
 
     while True:
@@ -173,10 +171,9 @@ def main() -> None:
                 logging.debug(
                     'Отсутствуют новые статусы работ'
                 )
-            
             timestamp = response.get('current_date')
         except Exception as error:
-            if last_error != error :
+            if last_error != error:
                 logging.error(
                     f'Ошибка {error}', exc_info=True
                 )
