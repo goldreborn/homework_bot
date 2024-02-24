@@ -1,5 +1,3 @@
-
-
 class TokenError(Exception):
     pass
 
