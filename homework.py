@@ -120,7 +120,6 @@ def check_response(response: Any) -> dict:
 
 def parse_status(homework):
     """Извлекает из информации о домашней работе статус работы."""
-    
     name = homework.get('homework_name')
     status = homework.get('status')
 
