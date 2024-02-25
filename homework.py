@@ -55,7 +55,7 @@ def send_message(bot: Bot, message: str) -> None:
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except TelegramError as err:
-        logging.exception(
+        logging.error(
             f'Боту не удалось отправить сообщение-ошибка{err}'
         )
     else:
@@ -77,12 +77,13 @@ def get_api_answer(timestamp: int) -> Any:
         raise ConnectionError(
             (
                 f'Ошибка {error} при попытке отправить запрос на сервер api'
-                f'| url={ENDPOINT} | headers={HEADERS} | params={payload}'
+                f'| url={ENDPOINT} | headers=HEADERS | params={payload}'
             )
         )
     if response.status_code != HTTPStatus.OK:
         raise ResponseError(
             f'Ошибка. Код ответа {response.status_code}'
+            f'Причина {response.reason}'
         )
 
     return response.json()
@@ -97,21 +98,23 @@ def check_response(response: Any) -> list:
             f'Ошибка. Полученный объект response не типа {type(dict)}'
         )
 
-    if not response['current_date']:
+    if 'current_date' not in response:
         raise KeyError(
             'Ошибка. Отсутствует дата по ключю current_date'
         )
 
-    try:
-        homeworks = response['homeworks']
-    except KeyError:
+    if 'homeworks' not in response:
         raise KeyError(
-            'Ошибка. Не найдены данные по ключю homeworks'
+            'Ошибка. Не найден ключ homeworks'
         )
+
+    homeworks = response['homeworks']
 
     if not isinstance(homeworks, list):
         raise TypeError(
-            f'Ошибка. Все домашки должны передаваться в списке {type(list)}'
+            ('Ошибка. Все домашки должны передаваться в списке'
+             f'А получили {type(homeworks)}'
+            )
         )
     logging.info('Закончил проверку на совпадение типа данных')
 
@@ -132,10 +135,10 @@ def parse_status(homework: dict) -> str:
 
     if status not in HOMEWORK_VERDICTS.keys():
         raise KeyError(
-            'Отсутствует статус по ключю status в словаре вердиктов'
+            f'Отсутствует статус {status} по ключю status в словаре вердиктов'
         )
 
-    if not homework.__contains__('homework_name'):
+    if 'homework_name' not in homework:
         raise KeyError(
             'Отсутствует имя по ключю homework_name в запрашиваемой работе'
         )
@@ -167,8 +170,9 @@ def main() -> None:
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
 
-            if len(homeworks) != 0:
+            if homeworks:
                 send_message(bot=bot, message=parse_status(homeworks[0]))
+                last_error = None
             else:
                 logging.debug(
                     'Отсутствуют новые статусы работ'
@@ -176,10 +180,10 @@ def main() -> None:
             timestamp = response.get('current_date')
         except Exception as error:
             if last_error != error:
-                logging.error(
+                last_error = error
+            logging.error(
                     f'Ошибка {error}', exc_info=True
                 )
-                last_error = error
         finally:
             time.sleep(RETRY_PERIOD)
 
