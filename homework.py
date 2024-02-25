@@ -180,8 +180,8 @@ def main() -> None:
             if last_error != error:
                 last_error = error
             logging.error(
-                    f'Ошибка {error}', exc_info=True
-                )
+                f'Ошибка {error}', exc_info=True
+            )
         finally:
             time.sleep(RETRY_PERIOD)
 
