@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from telegram import Bot
 from telegram.error import TelegramError
 
-from error_handler import ResponseError
+from error_handler import ResponseError, TokenError
 
 
 load_dotenv()
@@ -36,13 +36,12 @@ def check_tokens() -> bool:
     """Проверяем наличие токенов."""
     logging.info('Проверка наличия токенов...')
 
-    for token in TOKENS:
-
-        if not all(globals()[token]):
-            logging.critical(
-                f'Критическая ошибка. Отсутствуют токены {token}'
-            )
-    return True
+    if all([globals()[x] for x in TOKENS]):
+        
+        logging.critical(
+            'Отсутствуют необходимые токены'
+        )
+        return True
 
 
 def send_message(bot: Bot, message: str) -> None:
