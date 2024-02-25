@@ -178,6 +178,7 @@ def main() -> None:
             timestamp = response.get('current_date')
         except Exception as error:
             if last_error != error:
+                send_message(bot, f'Ошибка {error}')
                 last_error = error
             logging.error(
                 f'Ошибка {error}', exc_info=True
