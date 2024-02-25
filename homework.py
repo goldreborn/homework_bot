@@ -36,7 +36,7 @@ def check_tokens() -> bool:
     """Проверяем наличие токенов."""
     logging.info('Проверка наличия токенов...')
 
-    if all([globals()[x] for x in TOKENS]):
+    if not all([globals()[x] for x in TOKENS]):
 
         logging.critical(
             'Отсутствуют необходимые токены'
@@ -147,7 +147,7 @@ def parse_status(homework: dict) -> str:
 
 def main() -> None:
     """Главный метод, вызывается стразу при запуске всего кода."""
-    if not check_tokens():
+    if check_tokens():
 
         logging.critical('Отсутствуют обязательные переменные окружения')
 
