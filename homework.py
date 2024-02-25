@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from telegram import Bot
 from telegram.error import TelegramError
 
-from error_handler import ResponseError
+from error_handler import ResponseError, TokenError
 
 
 load_dotenv()
@@ -32,16 +32,19 @@ HOMEWORK_VERDICTS = {
 }
 
 
-def check_tokens() -> bool:
+def check_tokens():
     """Проверяем наличие токенов."""
     logging.info('Проверка наличия токенов...')
 
-    if not all([globals()[x] for x in TOKENS]):
+    missing_tokens = [x for x in TOKENS if not globals()[x]]
 
-        logging.critical(
-            'Отсутствуют необходимые токены'
-        )
-        return True
+    token_error = f'Отсутствуют токены {str(missing_tokens)}'
+
+    if missing_tokens:
+
+        logging.critical(token_error)
+
+        raise TokenError(token_error)
 
 
 def send_message(bot: Bot, message: str) -> None:
@@ -96,7 +99,7 @@ def check_response(response: Any) -> list:
 
     if 'current_date' not in response:
         raise KeyError(
-            'Ошибка. Отсутствует дата по ключю current_date'
+            'Ошибка. Отсутствует ключ current_date'
         )
 
     if 'homeworks' not in response:
@@ -147,11 +150,8 @@ def parse_status(homework: dict) -> str:
 
 def main() -> None:
     """Главный метод, вызывается стразу при запуске всего кода."""
-    if check_tokens():
 
-        logging.critical('Отсутствуют обязательные переменные окружения')
-
-        exit()
+    check_tokens()
 
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
@@ -173,11 +173,15 @@ def main() -> None:
                 )
             timestamp = response.get('current_date')
         except Exception as error:
-            if last_error != error:
-                send_message(bot, f'Ошибка {error}')
-                last_error = error
+
+            err = f'Ошибка {error}'
+
+            if last_error != err:
+                send_message(bot, err)
+                last_error = err
+
             logging.error(
-                f'Ошибка {error}', exc_info=True
+                err, exc_info=True
             )
         finally:
             time.sleep(RETRY_PERIOD)
