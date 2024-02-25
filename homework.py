@@ -38,13 +38,10 @@ def check_tokens() -> bool:
 
     for token in TOKENS:
 
-        if not globals()[token]:
-
+        if not all(globals()[token]):
             logging.critical(
                 f'Критическая ошибка. Отсутствуют токены {token}'
             )
-            return False
-
     return True
 
 
