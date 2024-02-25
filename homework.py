@@ -150,7 +150,6 @@ def parse_status(homework: dict) -> str:
 
 def main() -> None:
     """Главный метод, вызывается стразу при запуске всего кода."""
-
     check_tokens()
 
     bot = Bot(token=TELEGRAM_TOKEN)
