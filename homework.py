@@ -112,9 +112,7 @@ def check_response(response: Any) -> list:
 
     if not isinstance(homeworks, list):
         raise TypeError(
-            ('Ошибка. Все домашки должны передаваться в списке'
-             f'А получили {type(homeworks)}'
-            )
+            f'Ошибка. Домашки должны быть в списке, а не {type(homeworks)}'
         )
     logging.info('Закончил проверку на совпадение типа данных')
 
